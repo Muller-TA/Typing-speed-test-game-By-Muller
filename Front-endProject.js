@@ -3,7 +3,6 @@
   const initialWords = ["Test", "Rust", "Playing", "Hello", "Javascript", "Muller"];
   const lvls = { "Easy": 5, "Normal": 3, "Hard": 2 };
 
-  // الحالة العامة
   let words = initialWords.slice();
   let DefaultLevelName = "Normal";
   let DefaultLevelSeconds = lvls[DefaultLevelName];
@@ -11,7 +10,6 @@
   let timeLeft = DefaultLevelSeconds;
   let gameOver = false;
 
-  // عناصر الـ DOM
   const levelList = document.querySelector(".level-list");
   const startButton = document.querySelector(".start");
   const restartButton = document.querySelector(".restart");
@@ -28,7 +26,7 @@
   if (input) input.onpaste = () => false;
 
   // ========================= [ CREATE ] =========================
-  function createUI() {
+  function initUI() {
     if (lvlNameSpan) lvlNameSpan.textContent = DefaultLevelName;
     if (secondsSpan) secondsSpan.textContent = DefaultLevelSeconds;
     if (timeLeftSpan) timeLeftSpan.textContent = DefaultLevelSeconds;
@@ -38,14 +36,16 @@
     if (upcomingWord) upcomingWord.innerHTML = "Words Will Show Here";
     if (theWord) theWord.textContent = "";
   }
+  initUI();
 
-  function createLevelList() {
+  // ========================= [ UPDATE ] =========================
+  function setupLevelList() {
     if (!levelList) return;
 
     levelList.addEventListener("click", (e) => {
       const li = e.target.closest("li");
       if (!li) return;
-      selectLevel(li);
+      selectLevelItem(li);
     });
 
     levelList.addEventListener("keydown", (e) => {
@@ -53,51 +53,52 @@
       if (!li) return;
       if (["Enter", " "].includes(e.key)) {
         e.preventDefault();
-        selectLevel(li);
+        selectLevelItem(li);
       }
       if (["ArrowRight", "ArrowDown"].includes(e.key)) { e.preventDefault(); focusNext(li); }
       if (["ArrowLeft", "ArrowUp"].includes(e.key)) { e.preventDefault(); focusPrev(li); }
     });
-  }
 
-  // ========================= [ UPDATE ] =========================
-  function selectLevel(li) {
-    levelList.querySelectorAll("li").forEach(other => {
-      other.classList.remove("active");
-      other.setAttribute("aria-selected", "false");
-    });
-    li.classList.add("active");
-    li.setAttribute("aria-selected", "true");
+    function selectLevelItem(li) {
+      levelList.querySelectorAll("li").forEach(other => {
+        other.classList.remove("active");
+        other.setAttribute("aria-selected", "false");
+      });
+      li.classList.add("active");
+      li.setAttribute("aria-selected", "true");
 
-    const name = li.dataset.level;
-    const seconds = Number(li.dataset.seconds || lvls[name] || 3);
+      const name = li.dataset.level;
+      const seconds = Number(li.dataset.seconds || lvls[name] || 3);
 
-    DefaultLevelName = name;
-    DefaultLevelSeconds = seconds;
+      DefaultLevelName = name;
+      DefaultLevelSeconds = seconds;
 
-    if (lvlNameSpan) lvlNameSpan.textContent = name;
-    if (secondsSpan) secondsSpan.textContent = seconds;
-    if (timeLeftSpan) timeLeftSpan.textContent = seconds;
+      if (lvlNameSpan) lvlNameSpan.textContent = name;
+      if (secondsSpan) secondsSpan.textContent = seconds;
+      if (timeLeftSpan) timeLeftSpan.textContent = seconds;
 
-    if (startButton && (startButton.style.display === "none") && !gameOver) {
-      clearInterval(countdownId);
-      genWords();
-      startPlay();
+      if (startButton && (startButton.style.display === "none") && !gameOver) {
+        if (countdownId) clearInterval(countdownId);
+        genWords();
+        startPlay();
+      }
+    }
+
+    function focusNext(current) {
+      const items = Array.from(levelList.querySelectorAll("li"));
+      const idx = items.indexOf(current);
+      if (idx >= 0) items[(idx + 1) % items.length].focus();
+    }
+
+    function focusPrev(current) {
+      const items = Array.from(levelList.querySelectorAll("li"));
+      const idx = items.indexOf(current);
+      if (idx >= 0) items[(idx - 1 + items.length) % items.length].focus();
     }
   }
+  setupLevelList();
 
-  function focusNext(current) {
-    const items = Array.from(levelList.querySelectorAll("li"));
-    const idx = items.indexOf(current);
-    if (idx >= 0) items[(idx + 1) % items.length].focus();
-  }
-
-  function focusPrev(current) {
-    const items = Array.from(levelList.querySelectorAll("li"));
-    const idx = items.indexOf(current);
-    if (idx >= 0) items[(idx - 1 + items.length) % items.length].focus();
-  }
-
+  // ---------- Word Generator ----------
   function genWords() {
     if (!words.length) {
       if (theWord) theWord.textContent = "";
@@ -123,10 +124,13 @@
 
     timeLeft = DefaultLevelSeconds;
     if (timeLeftSpan) timeLeftSpan.textContent = timeLeft;
+    setTimeout(() => { if (input && !input.disabled) input.focus(); }, 10);
   }
 
+  // ---------- Game Start ----------
   function startPlay() {
     if (gameOver) return;
+
     if (countdownId) clearInterval(countdownId);
     if (!theWord || !theWord.textContent) genWords();
 
@@ -149,23 +153,25 @@
     }, 1000);
   }
 
+  // ---------- Check Answer ----------
   function handleAnswer() {
     if (gameOver) return;
     gameOver = true;
+
     if (finishMessage) { finishMessage.innerHTML = ""; finishMessage.style.display = "block"; }
     if (input) input.disabled = true;
 
     const userTyped = input ? input.value : "";
     const correct = theWord ? theWord.textContent : "";
-    const matched = isMatch(correct, userTyped);
 
-    if (matched) {
+    if (isMatch(correct, userTyped)) {
       if (scoreGot) scoreGot.textContent = Number(scoreGot.textContent || 0) + 1;
       if (words.length > 0) {
         gameOver = false;
         if (input) { input.disabled = false; input.value = ""; }
         genWords();
         startPlay();
+        setTimeout(() => { if (input && !input.disabled) input.focus(); }, 10);
         return;
       } else {
         showFinish("good", "Congratulations");
@@ -179,16 +185,16 @@
     if (input) input.disabled = true;
   }
 
+  function isMatch(correct, userTyped) {
+    if (DefaultLevelName === "Hard") return correct === userTyped;
+    return correct.trim().toUpperCase() === userTyped.trim().toUpperCase();
+  }
+
   function showFinish(className, message) {
     const span = document.createElement("span");
     span.className = className;
     span.textContent = message;
     if (finishMessage) finishMessage.appendChild(span);
-  }
-
-  function isMatch(correct, userTyped) {
-    if (DefaultLevelName === "Hard") return correct === userTyped;
-    return correct.trim().toUpperCase() === userTyped.trim().toUpperCase();
   }
 
   // ========================= [ DELETE / RESET ] =========================
@@ -199,7 +205,7 @@
     countdownId = null;
     if (input) { input.value = ""; input.disabled = false; }
     if (finishMessage) { finishMessage.innerHTML = ""; finishMessage.style.display = "none"; }
-    createUI();
+    initUI();
     genWords();
     startPlay();
   }
@@ -223,7 +229,4 @@
       }
     }
   });
-
-  createUI();
-  createLevelList();
 })();
